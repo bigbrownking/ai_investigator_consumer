@@ -1,4 +1,7 @@
 package org.di.digital_mediator.dto;
 
-public class ProcessingStatus {
+public enum ProcessingStatus {
+    PROCESSING,
+    COMPLETED,
+    FAILED
 }

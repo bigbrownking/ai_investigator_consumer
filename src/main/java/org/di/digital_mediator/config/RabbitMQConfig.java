@@ -1,2 +1,119 @@
-package org.di.digital_mediator.config;public class RabbitMQConfig {
+package org.di.digital_mediator.config;
+
+import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitMQConfig {
+
+    public static final String DOCUMENT_QUEUE = "document.processing.queue";
+    public static final String DOCUMENT_EXCHANGE = "document.exchange";
+    public static final String DOCUMENT_ROUTING_KEY = "document.process";
+
+    public static final String DLQ_QUEUE = "document.dlq";
+    public static final String DLQ_EXCHANGE = "document.dlq.exchange";
+    public static final String DLQ_ROUTING_KEY = "document.dlq";
+
+    public static final String RESULT_QUEUE = "document.result.queue";
+    public static final String RESULT_EXCHANGE = "document.result.exchange";
+    public static final String RESULT_PROCESSING_ROUTING_KEY = "document.result.processing";
+    public static final String RESULT_SUCCESS_ROUTING_KEY = "document.result.success";
+    public static final String RESULT_FAILURE_ROUTING_KEY = "document.result.failure";
+
+    @Bean
+    public Queue documentQueue() {
+        return QueueBuilder.durable(DOCUMENT_QUEUE)
+                .withArgument("x-dead-letter-exchange", DLQ_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", DLQ_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean
+    public DirectExchange documentExchange() {
+        return new DirectExchange(DOCUMENT_EXCHANGE);
+    }
+
+    @Bean
+    public Binding documentBinding(Queue documentQueue, DirectExchange documentExchange) {
+        return BindingBuilder
+                .bind(documentQueue)
+                .to(documentExchange)
+                .with(DOCUMENT_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue dlqQueue() {
+        return QueueBuilder.durable(DLQ_QUEUE).build();
+    }
+
+    @Bean
+    public DirectExchange dlqExchange() {
+        return new DirectExchange(DLQ_EXCHANGE);
+    }
+
+    @Bean
+    public Binding dlqBinding(Queue dlqQueue, DirectExchange dlqExchange) {
+        return BindingBuilder
+                .bind(dlqQueue)
+                .to(dlqExchange)
+                .with(DLQ_ROUTING_KEY);
+    }
+
+    @Bean
+    public Queue resultQueue() {
+        return QueueBuilder.durable(RESULT_QUEUE).build();
+    }
+
+    @Bean
+    public DirectExchange resultExchange() {
+        return new DirectExchange(RESULT_EXCHANGE);
+    }
+
+    @Bean
+    public Binding resultProcessingBinding(Queue resultQueue, DirectExchange resultExchange) {
+        return BindingBuilder
+                .bind(resultQueue)
+                .to(resultExchange)
+                .with(RESULT_PROCESSING_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding resultSuccessBinding(Queue resultQueue, DirectExchange resultExchange) {
+        return BindingBuilder
+                .bind(resultQueue)
+                .to(resultExchange)
+                .with(RESULT_SUCCESS_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding resultFailureBinding(Queue resultQueue, DirectExchange resultExchange) {
+        return BindingBuilder
+                .bind(resultQueue)
+                .to(resultExchange)
+                .with(RESULT_FAILURE_ROUTING_KEY);
+    }
+
+    @Bean
+    @SuppressWarnings("deprecation")
+    public MessageConverter jsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
+
+    @Bean
+    public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
+            ConnectionFactory connectionFactory,
+            MessageConverter jsonMessageConverter) {
+        SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(jsonMessageConverter);
+        factory.setConcurrentConsumers(1);
+        factory.setMaxConcurrentConsumers(1);
+        factory.setPrefetchCount(1);
+        return factory;
+    }
 }
