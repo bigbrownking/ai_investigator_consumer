@@ -21,38 +21,43 @@ public class DocumentProcessingConsumer {
 
     @RabbitListener(queues = RabbitMQConfig.DOCUMENT_QUEUE)
     public void processDocument(DocumentProcessingMessage message) {
-        log.info("Received document for processing: {} from case {}",
-                message.getOriginalFileName(), message.getCaseNumber());
-
-        long startTime = System.currentTimeMillis();
+        log.info("📥 Received document for processing: {} (ID: {}) from case {} uploaded by {}",
+                message.getOriginalFileName(),
+                message.getCaseFileId(),
+                message.getCaseNumber(),
+                message.getUserEmail());
 
         try {
-            log.info("Downloading file from Minio: {}", message.getFileUrl());
+            // Download file from MinIO
+            log.info("📂 Downloading file from MinIO: {}", message.getFileUrl());
             InputStream fileStream = minioService.downloadFile(message.getFileUrl());
 
-            aiProcessingService.notifyProcessing(message);
+            log.info("🤖 Starting AI processing for file: {} (ID: {}) in case {}",
+                    message.getOriginalFileName(),
+                    message.getCaseFileId(),
+                    message.getCaseNumber());
 
-            // 2. Отправить в AI модель (займет 3-4 минуты)
-            log.info("Sending file to AI model for processing...");
-            String result = aiProcessingService.processDocument(
+            aiProcessingService.processDocument(
                     fileStream,
                     message.getOriginalFileName(),
-                    message.getCaseFileId()
+                    message.getCaseNumber(),
+                    message
             );
 
-            long duration = (System.currentTimeMillis() - startTime) / 1000;
-            log.info("Successfully processed document {} in {} seconds. Result: {}",
-                    message.getOriginalFileName(), duration, result);
-
-            aiProcessingService.notifyCompletion(message, result, duration);
+            log.info("✅ AI processing initiated successfully for document {} (ID: {}) in case {}",
+                    message.getOriginalFileName(),
+                    message.getCaseFileId(),
+                    message.getCaseNumber());
 
         } catch (Exception e) {
-            long duration = (System.currentTimeMillis() - startTime) / 1000;
-            log.error("Failed to process document {} after {} seconds: {}",
-                    message.getOriginalFileName(), duration, e.getMessage(), e);
+            log.error("❌ Failed to initiate processing for document {} (ID: {}) in case {}: {}",
+                    message.getOriginalFileName(),
+                    message.getCaseFileId(),
+                    message.getCaseNumber(),
+                    e.getMessage(),
+                    e);
 
-            aiProcessingService.notifyFailure(message, e.getMessage(), duration);
-            throw new RuntimeException("Document processing failed", e);
+            aiProcessingService.notifyFailure(message, e.getMessage(), 0);
         }
     }
 }

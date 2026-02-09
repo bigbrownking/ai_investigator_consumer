@@ -22,6 +22,7 @@ public class RabbitMQConfig {
     public static final String RESULT_QUEUE = "document.result.queue";
     public static final String RESULT_EXCHANGE = "document.result.exchange";
     public static final String RESULT_PROCESSING_ROUTING_KEY = "document.result.processing";
+    public static final String RESULT_PENDING_ROUTING_KEY = "document.result.pending";
     public static final String RESULT_SUCCESS_ROUTING_KEY = "document.result.success";
     public static final String RESULT_FAILURE_ROUTING_KEY = "document.result.failure";
 
@@ -80,6 +81,13 @@ public class RabbitMQConfig {
                 .bind(resultQueue)
                 .to(resultExchange)
                 .with(RESULT_PROCESSING_ROUTING_KEY);
+    }
+    @Bean
+    public Binding resultPendingBinding(Queue resultQueue, DirectExchange resultExchange) {
+        return BindingBuilder
+                .bind(resultQueue)
+                .to(resultExchange)
+                .with(RESULT_PENDING_ROUTING_KEY);
     }
 
     @Bean
