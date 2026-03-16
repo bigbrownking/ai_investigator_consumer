@@ -10,7 +10,6 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -33,44 +32,36 @@ public class AIProcessingService {
     @Value("${index.control.port}")
     private String port;
 
+    @Value("${spring.rabbitmq.result.processing.routing-key}")
+    public String RESULT_PROCESSING_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.pending.routing-key}")
+    public String RESULT_PENDING_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.success.routing-key}")
+    public String RESULT_SUCCESS_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.failure.routing-key}")
+    public String RESULT_FAILURE_ROUTING_KEY;
+
+    @Value("${spring.rabbitmq.result.exchange}")
+    public String RESULT_EXCHANGE = "document.result.exchange";
     public void processDocument(InputStream fileStream, String fileName,
                                 String caseNumber, DocumentProcessingMessage originalMessage) {
+        long startTime = System.currentTimeMillis();
 
         notifyProcessing(originalMessage);
 
         try {
             byte[] fileBytes = fileStream.readAllBytes();
 
-            // Вызываем асинхронный метод
-            processDocumentAsync(fileBytes, fileName, caseNumber, originalMessage);
-
-            log.info("AI processing task submitted for file {} (ID: {}) in case {}",
-                    fileName, originalMessage.getCaseFileId(), caseNumber);
-
-        } catch (Exception e) {
-            log.error("Failed to submit AI processing task for file {} (ID: {}) in case {}: {}",
-                    fileName, originalMessage.getCaseFileId(), caseNumber, e.getMessage());
-            notifyFailure(originalMessage, e.getMessage(), 0);
-        }
-    }
-
-    @Async("aiProcessingExecutor") // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
-    public void processDocumentAsync(byte[] fileBytes, String fileName,
-                                     String caseNumber, DocumentProcessingMessage originalMessage) {
-        long startTime = System.currentTimeMillis();
-
-        try {
             log.info("AI processing started for file {} (ID: {}) in case {}",
                     fileName, originalMessage.getCaseFileId(), caseNumber);
 
-            // ЗАМЕНИЛИ .subscribe() на .block()
             String result = webClient.post()
                     .uri(aiModelUrl + ":" + port + "/workspaces/" + caseNumber + "/upload")
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .bodyValue(createMultipartBody(fileBytes, fileName))
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block(); // блокирующий вызов (но в отдельном потоке благодаря @Async)
+                    .block();
 
             long duration = (System.currentTimeMillis() - startTime) / 1000;
             log.info("AI processing completed for file {} (ID: {}) in case {} after {}s",
@@ -101,7 +92,6 @@ public class AIProcessingService {
         return body;
     }
 
-    // Остальные методы БЕЗ ИЗМЕНЕНИЙ
     public void notifyProcessing(DocumentProcessingMessage originalMessage) {
         sendNotification(ProcessingResultMessage.builder()
                 .caseFileId(originalMessage.getCaseFileId())
@@ -190,14 +180,14 @@ public class AIProcessingService {
         while (retryCount < maxRetries) {
             try {
                 rabbitTemplate.convertAndSend(
-                        RabbitMQConfig.RESULT_EXCHANGE,
+                        RESULT_EXCHANGE,
                         getRoutingKey(message.getStatus()),
                         message
                 );
 
                 log.debug("Successfully sent {} notification to exchange {} with routing key {}",
                         message.getStatus(),
-                        RabbitMQConfig.RESULT_EXCHANGE,
+                        RESULT_EXCHANGE,
                         getRoutingKey(message.getStatus()));
 
                 return;
@@ -220,7 +210,7 @@ public class AIProcessingService {
                             message.getStatus());
                 } else {
                     try {
-                        Thread.sleep(1000 * retryCount);
+                        Thread.sleep(1000L * retryCount);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         log.error("Retry sleep interrupted for file {} in case {}",
@@ -234,10 +224,10 @@ public class AIProcessingService {
 
     private String getRoutingKey(ProcessingStatus status) {
         return switch (status) {
-            case PENDING -> RabbitMQConfig.RESULT_PENDING_ROUTING_KEY;
-            case PROCESSING -> RabbitMQConfig.RESULT_PROCESSING_ROUTING_KEY;
-            case COMPLETED -> RabbitMQConfig.RESULT_SUCCESS_ROUTING_KEY;
-            case FAILED -> RabbitMQConfig.RESULT_FAILURE_ROUTING_KEY;
+            case PENDING -> RESULT_PENDING_ROUTING_KEY;
+            case PROCESSING -> RESULT_PROCESSING_ROUTING_KEY;
+            case COMPLETED -> RESULT_SUCCESS_ROUTING_KEY;
+            case FAILED -> RESULT_FAILURE_ROUTING_KEY;
         };
     }
 }

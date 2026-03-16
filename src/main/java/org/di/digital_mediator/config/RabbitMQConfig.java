@@ -1,30 +1,43 @@
 package org.di.digital_mediator.config;
 
+import jakarta.validation.Valid;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMQConfig {
 
-    public static final String DOCUMENT_QUEUE = "document.processing.queue";
-    public static final String DOCUMENT_EXCHANGE = "document.exchange";
-    public static final String DOCUMENT_ROUTING_KEY = "document.process";
+    @Value("${spring.rabbitmq.document.queue}")
+    public String DOCUMENT_QUEUE;
+    @Value("${spring.rabbitmq.document.exchange}")
+    public String DOCUMENT_EXCHANGE;
+    @Value("${spring.rabbitmq.document.routing-key}")
+    public String DOCUMENT_ROUTING_KEY;
 
-    public static final String DLQ_QUEUE = "document.dlq";
-    public static final String DLQ_EXCHANGE = "document.dlq.exchange";
-    public static final String DLQ_ROUTING_KEY = "document.dlq";
-
-    public static final String RESULT_QUEUE = "document.result.queue";
-    public static final String RESULT_EXCHANGE = "document.result.exchange";
-    public static final String RESULT_PROCESSING_ROUTING_KEY = "document.result.processing";
-    public static final String RESULT_PENDING_ROUTING_KEY = "document.result.pending";
-    public static final String RESULT_SUCCESS_ROUTING_KEY = "document.result.success";
-    public static final String RESULT_FAILURE_ROUTING_KEY = "document.result.failure";
+    @Value("${spring.rabbitmq.dlq.queue}")
+    public String DLQ_QUEUE;
+    @Value("${spring.rabbitmq.dlq.exchange}")
+    public String DLQ_EXCHANGE;
+    @Value("${spring.rabbitmq.dlq.routing-key}")
+    public String DLQ_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.queue}")
+    public String RESULT_QUEUE;
+    @Value("${spring.rabbitmq.result.exchange}")
+    public String RESULT_EXCHANGE = "document.result.exchange";
+    @Value("${spring.rabbitmq.result.processing.routing-key}")
+    public String RESULT_PROCESSING_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.pending.routing-key}")
+    public String RESULT_PENDING_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.success.routing-key}")
+    public String RESULT_SUCCESS_ROUTING_KEY;
+    @Value("${spring.rabbitmq.result.failure.routing-key}")
+    public String RESULT_FAILURE_ROUTING_KEY;
 
     @Bean
     public Queue documentQueue() {

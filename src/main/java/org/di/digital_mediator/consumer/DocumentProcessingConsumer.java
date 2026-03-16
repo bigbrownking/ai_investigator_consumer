@@ -19,7 +19,7 @@ public class DocumentProcessingConsumer {
     private final MinioService minioService;
     private final AIProcessingService aiProcessingService;
 
-    @RabbitListener(queues = RabbitMQConfig.DOCUMENT_QUEUE)
+    @RabbitListener(queues = "${spring.rabbitmq.document.queue}")
     public void processDocument(DocumentProcessingMessage message) {
         log.info("📥 Received document for processing: {} (ID: {}) from case {} uploaded by {}",
                 message.getOriginalFileName(),
