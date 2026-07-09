@@ -56,9 +56,9 @@ public class AIProcessingService {
                     fileName, originalMessage.getCaseFileId(), caseNumber);
 
             String result = webClient.post()
-                    .uri(aiModelUrl + ":" + port + "/workspaces/" + caseNumber + "/upload")
+                    .uri(aiModelUrl + ":" + port + "/documents/upload/" + caseNumber)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .bodyValue(createMultipartBody(fileBytes, fileName))
+                    .bodyValue(createMultipartBody(fileBytes, fileName, originalMessage.getLanguage()))
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -78,7 +78,7 @@ public class AIProcessingService {
         }
     }
 
-    private MultiValueMap<String, Object> createMultipartBody(byte[] fileBytes, String fileName) {
+    private MultiValueMap<String, Object> createMultipartBody(byte[] fileBytes, String fileName, String language) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
 
         ByteArrayResource fileResource = new ByteArrayResource(fileBytes) {
@@ -88,7 +88,8 @@ public class AIProcessingService {
             }
         };
 
-        body.add("files", fileResource);
+        body.add("file", fileResource);
+        body.add("language", language);
         return body;
     }
 
@@ -99,6 +100,7 @@ public class AIProcessingService {
                 .fileName(originalMessage.getOriginalFileName())
                 .userEmail(originalMessage.getUserEmail())
                 .status(ProcessingStatus.PROCESSING)
+                .language(originalMessage.getLanguage())
                 .result(null)
                 .errorMessage(null)
                 .timestamp(LocalDateTime.now())
@@ -118,6 +120,7 @@ public class AIProcessingService {
                 .fileName(originalMessage.getOriginalFileName())
                 .userEmail(originalMessage.getUserEmail())
                 .status(ProcessingStatus.COMPLETED)
+                .language(originalMessage.getLanguage())
                 .result(result)
                 .errorMessage(null)
                 .timestamp(LocalDateTime.now())
@@ -139,6 +142,7 @@ public class AIProcessingService {
                 .fileName(originalMessage.getOriginalFileName())
                 .userEmail(originalMessage.getUserEmail())
                 .status(ProcessingStatus.FAILED)
+                .language(originalMessage.getLanguage())
                 .result(null)
                 .errorMessage(errorMessage)
                 .timestamp(LocalDateTime.now())
@@ -161,6 +165,7 @@ public class AIProcessingService {
                 .fileName(originalMessage.getOriginalFileName())
                 .userEmail(originalMessage.getUserEmail())
                 .status(ProcessingStatus.PENDING)
+                .language(originalMessage.getLanguage())
                 .result(null)
                 .errorMessage(null)
                 .timestamp(LocalDateTime.now())

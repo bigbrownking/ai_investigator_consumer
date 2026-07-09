@@ -18,6 +18,7 @@ public class ProcessingResultMessage {
     private String userEmail;
     private ProcessingStatus status;
     private String result;
+    private String language;
     private String errorMessage;
     private LocalDateTime timestamp;
 
