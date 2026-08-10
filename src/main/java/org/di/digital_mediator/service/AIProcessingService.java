@@ -6,6 +6,7 @@ import org.di.digital_mediator.config.RabbitMQConfig;
 import org.di.digital_mediator.dto.DocumentProcessingMessage;
 import org.di.digital_mediator.dto.ProcessingResultMessage;
 import org.di.digital_mediator.dto.ProcessingStatus;
+import org.di.digital_mediator.dto.UploadResponse;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -43,6 +44,7 @@ public class AIProcessingService {
 
     @Value("${spring.rabbitmq.result.exchange}")
     public String RESULT_EXCHANGE = "document.result.exchange";
+
     public void processDocument(InputStream fileStream, String fileName,
                                 String caseNumber, DocumentProcessingMessage originalMessage) {
         long startTime = System.currentTimeMillis();
@@ -55,21 +57,31 @@ public class AIProcessingService {
             log.info("AI processing started for file {} (ID: {}) in case {}",
                     fileName, originalMessage.getCaseFileId(), caseNumber);
 
-            String result = webClient.post()
+            UploadResponse response = webClient.post()
                     .uri(aiModelUrl + ":" + port + "/documents/upload/" + caseNumber)
                     .contentType(MediaType.MULTIPART_FORM_DATA)
                     .bodyValue(createMultipartBody(fileBytes, fileName, originalMessage.getLanguage()))
                     .retrieve()
-                    .bodyToMono(String.class)
+                    .bodyToMono(UploadResponse.class)
                     .block();
 
             long duration = (System.currentTimeMillis() - startTime) / 1000;
+            if (response == null) {
+                log.warn("AI response is NULL for file {} (ID: {}) in case {}",
+                        fileName, originalMessage.getCaseFileId(), caseNumber);
+            } else {
+                log.info("AI response parsed: status={}, message={}, trackId={}, documentId={}",
+                        response.getStatus(), response.getMessage(),
+                        response.getTrackId(), response.getDocumentId());
+                log.info("AI classification: {}", response.getClassification());
+                log.info("AI assessment: {}", response.getAssessment());
+            }
             log.info("AI processing completed for file {} (ID: {}) in case {} after {}s",
                     fileName, originalMessage.getCaseFileId(), caseNumber, duration);
 
-            notifyCompletion(originalMessage, result, duration);
-
-        } catch (Exception e) {
+            notifyCompletion(originalMessage, response, duration);
+        } catch (
+                Exception e) {
             long duration = (System.currentTimeMillis() - startTime) / 1000;
             log.error("AI processing failed for file {} (ID: {}) in case {} after {}s: {}",
                     fileName, originalMessage.getCaseFileId(), caseNumber, duration, e.getMessage());
@@ -89,7 +101,7 @@ public class AIProcessingService {
         };
 
         body.add("file", fileResource);
-        body.add("language", language);
+        body.add("language", language != null ? language : "russian");
         return body;
     }
 
@@ -113,7 +125,8 @@ public class AIProcessingService {
                 originalMessage.getUserEmail());
     }
 
-    public void notifyCompletion(DocumentProcessingMessage originalMessage, String result, long durationSeconds) {
+    public void notifyCompletion(DocumentProcessingMessage originalMessage,
+                                 UploadResponse response, long durationSeconds) {
         sendNotification(ProcessingResultMessage.builder()
                 .caseFileId(originalMessage.getCaseFileId())
                 .caseNumber(originalMessage.getCaseNumber())
@@ -121,10 +134,12 @@ public class AIProcessingService {
                 .userEmail(originalMessage.getUserEmail())
                 .status(ProcessingStatus.COMPLETED)
                 .language(originalMessage.getLanguage())
-                .result(result)
+                .result(response.getMessage())
                 .errorMessage(null)
                 .timestamp(LocalDateTime.now())
                 .processingDurationSeconds(durationSeconds)
+                .classification(response.getClassification())
+                .assessment(response.getAssessment())
                 .build());
 
         log.info("Sent COMPLETED notification for file {} (ID: {}) in case {} from user {} ({}s)",
@@ -179,6 +194,9 @@ public class AIProcessingService {
     }
 
     private void sendNotification(ProcessingResultMessage message) {
+        log.info("Sending message: status={}, classification={}, assessment={}",
+                message.getStatus(), message.getClassification(), message.getAssessment());
+
         int maxRetries = 3;
         int retryCount = 0;
 
